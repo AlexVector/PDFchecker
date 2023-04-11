@@ -6,6 +6,7 @@ from typing import Tuple
 import zipfile
 from xml.etree import ElementTree
 import os
+import camelot
 
 files = os.listdir()
 
@@ -18,23 +19,35 @@ for file in files:
 if pdf_file:
     parse(file, "example.docx")
     print('!!!ВНИМАНИЕ!!!')
-    print('Программа может не распознать некоторые графические элементы.')
-    print('Пожалуйста, сверьте количество изображений в документе с результатом программы.')
-    print('Погрешность размеров графических элементов: 0.1 - 0.3 миллиметра.')
+    print('Программа может не распознать некоторые графические элементы и таблицы.')
+    print('Пожалуйста, сверьте количество изображений и таблиц в документе с результатом программы.')
+    print('Погрешность размеров графических элементов и таблиц: 0.1 - 0.3 миллиметра.')
     pdf_reader = PyPDF2.PdfReader(open(pdf_file, 'rb'))  # открываем pdf файл для чтения
-    num_pages = len(pdf_reader.pages)  # получаем количество страниц в pdf файле
     total_chars = 0  # общее количество символов
     total_lines = 0  # общее количество строк
-    full_total_area = 0 # общая площадь изображений по документу
+    full_total_img_area = 0 # общая площадь изображений по документу
+    full_total_tab_area = 0 # общая площадь изображений по документу
     doc = fitz.open(pdf_file)  # открываем pdf файл для обработки изображений
 
-    for i in range(num_pages):  # перебираем все страницы в pdf файле
-        page = pdf_reader.pages[i]  # получаем текущую страницу
-        text = page.extract_text()  # извлекаем текст со страницы
-        num_chars = len(text)  # подсчитываем количество символов в тексте
-        num_lines = len(text.splitlines())  # подсчитываем количество строк в тексте
-        total_chars += num_chars  # добавляем к общему количеству символов
-        total_lines += num_lines  # добавляем к общему количеству строк
+    for page in range(len(pdf_reader.pages)):  # перебираем все страницы в pdf файле
+        page_text = pdf_reader.pages[page].extract_text()
+        lines = page_text.split('\n')
+        for line in lines:
+            total_lines += 1
+            total_chars += len(line)
+
+        tables = camelot.read_pdf(pdf_file, pages=str(page + 1)) # открываем файл через специальную библиотеку для извлечения таблиц
+        # Цикл для поиска таблиц на каждом листе
+        for table in tables:
+            x1, y1, x2, y2 = table._bbox # Получение координат углов внешней границы таблицы в пиклесях
+            width = x2 - x1 # Вычисление ширины таблицы в пикселях
+            height = y2 - y1 # Вычисление высоты таблицы в пикселях
+            width_cm = width * 0.035277778 # Перевод ширины из пикселей в сантиметры
+            height_cm = height * 0.035277778 # Перевод высоты из пикселей в сантиметры
+            table_area = width_cm * height_cm # Вычисление площади таблицы в сантиметрах квадратных
+            full_total_tab_area += table_area
+            print(f'Таблица на странице {page + 1}: {width_cm:.2f} см. x {height_cm:.2f} см. Площадь: {table_area:.2f} кв. сантиметров.') # Вывод результатов и площади таблицы
+
 
     with zipfile.ZipFile('example.docx') as docx:
         # Extract the document.xml file from the zip file
@@ -59,14 +72,17 @@ if pdf_file:
                 width = cx / 360000
                 height = cy / 360000
                 this_img_area = width * height
-                full_total_area += this_img_area
+                full_total_img_area += this_img_area
                 print(f'Изображение {img_counter}: {width:.2f} x {height:.2f} см. Площадь: {this_img_area:.2f} кв. сантиметров.')
                 img_counter += 1
-    os.remove("example.docx")
+    #os.remove("example.docx")
 
     print(f'Количество символов: {total_chars}')
     print(f'Количество строк: {total_lines}')
-    print(f'Площадь графических материалов по всему документу: {round(full_total_area, 2)} кв. сантиметров.')
+    print(f'Площадь графических материалов по всему документу: {round(full_total_img_area, 2)} кв. сантиметров.')
+    print(f'Площадь таблиц по всему документу: {round(full_total_tab_area, 2)} кв. сантиметров.')
+    print(f'ВНИМАНИЕ! Если таблицы в документе сохранены как картинки, то они посчитаются и в площади граф. '
+          f'материалов, и в площади таблиц.')
     print('----------------------------------------------')
 else:
     print('Отсутствуют pdf файлы в папке программы...')
