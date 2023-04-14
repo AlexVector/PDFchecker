@@ -17,7 +17,7 @@ for file in files:
         break
 
 if pdf_file:
-    parse(file, "example.docx")
+    parse(file, "КОНВЕРТИРОВАНО.docx")
     print('!!!ВНИМАНИЕ!!!')
     print('Программа может не распознать некоторые графические элементы и таблицы.')
     print('Пожалуйста, сверьте количество изображений и таблиц в документе с результатом программы.')
@@ -49,7 +49,7 @@ if pdf_file:
             print(f'Таблица на странице {page + 1}: {width_cm:.2f} см. x {height_cm:.2f} см. Площадь: {table_area:.2f} кв. сантиметров.') # Вывод результатов и площади таблицы
 
 
-    with zipfile.ZipFile('example.docx') as docx:
+    with zipfile.ZipFile('КОНВЕРТИРОВАНО.docx') as docx:
         # Extract the document.xml file from the zip file
         with docx.open('word/document.xml') as f:
             # Parse the XML content
