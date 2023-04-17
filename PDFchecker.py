@@ -7,8 +7,18 @@ import zipfile
 from xml.etree import ElementTree
 import os
 import camelot
+from datetime import datetime
 
 files = os.listdir()
+
+# Get the current date and time
+now = datetime.now()
+# Format the date and time
+formatted_date = now.strftime('%d%m%y%H%M%S')
+# Create the file name
+file_name = f'Отчёт_{formatted_date}.txt'
+
+os.makedirs('Отчёты', exist_ok=True)
 
 pdf_file = None
 for file in files:
@@ -29,61 +39,71 @@ if pdf_file:
     full_total_tab_area = 0 # общая площадь изображений по документу
     doc = fitz.open(pdf_file)  # открываем pdf файл для обработки изображений
 
-    for page in range(len(pdf_reader.pages)):  # перебираем все страницы в pdf файле
-        page_text = pdf_reader.pages[page].extract_text()
-        lines = page_text.split('\n')
-        for line in lines:
-            total_lines += 1
-            total_chars += len(line)
+    # Open the file for writing in the subdirectory
+    with open(os.path.join('Отчёты', file_name), 'w') as txt:
+        for page in range(len(pdf_reader.pages)):  # перебираем все страницы в pdf файле
+            page_text = pdf_reader.pages[page].extract_text()
+            lines = page_text.split('\n')
+            for line in lines:
+                total_lines += 1
+                total_chars += len(line)
 
-        tables = camelot.read_pdf(pdf_file, pages=str(page + 1)) # открываем файл через специальную библиотеку для извлечения таблиц
-        # Цикл для поиска таблиц на каждом листе
-        for table in tables:
-            x1, y1, x2, y2 = table._bbox # Получение координат углов внешней границы таблицы в пиклесях
-            width = x2 - x1 # Вычисление ширины таблицы в пикселях
-            height = y2 - y1 # Вычисление высоты таблицы в пикселях
-            width_cm = width * 0.035277778 # Перевод ширины из пикселей в сантиметры
-            height_cm = height * 0.035277778 # Перевод высоты из пикселей в сантиметры
-            table_area = width_cm * height_cm # Вычисление площади таблицы в сантиметрах квадратных
-            full_total_tab_area += table_area
-            print(f'Таблица на странице {page + 1}: {width_cm:.2f} см. x {height_cm:.2f} см. Площадь: {table_area:.2f} кв. сантиметров.') # Вывод результатов и площади таблицы
+            tables = camelot.read_pdf(pdf_file, pages=str(
+                page + 1))  # открываем файл через специальную библиотеку для извлечения таблиц
+            # Цикл для поиска таблиц на каждом листе
+            for table in tables:
+                x1, y1, x2, y2 = table._bbox  # Получение координат углов внешней границы таблицы в пиклесях
+                width = x2 - x1  # Вычисление ширины таблицы в пикселях
+                height = y2 - y1  # Вычисление высоты таблицы в пикселях
+                width_cm = width * 0.035277778  # Перевод ширины из пикселей в сантиметры
+                height_cm = height * 0.035277778  # Перевод высоты из пикселей в сантиметры
+                table_area = width_cm * height_cm  # Вычисление площади таблицы в сантиметрах квадратных
+                full_total_tab_area += table_area
+                print(f'Таблица на странице {page + 1}: {width_cm:.2f} см. x {height_cm:.2f} см. Площадь: {table_area:.2f} кв. сантиметров.')  # Вывод результатов и площади таблицы
+                txt.write(f'Таблица на странице {page + 1}: {width_cm:.2f} см. x {height_cm:.2f} см. Площадь: {table_area:.2f} кв. сантиметров.'+'\n')
 
+        with zipfile.ZipFile('КОНВЕРТИРОВАНО.docx') as docx:
+            # Extract the document.xml file from the zip file
+            with docx.open('word/document.xml') as f:
+                # Parse the XML content
+                tree = ElementTree.parse(f)
+                root = tree.getroot()
+                # Define the XML namespaces
+                ns = {
+                    'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                    'wp': 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+                    'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+                    'pic': 'http://schemas.openxmlformats.org/drawingml/2006/picture'
+                }
+                # Find all inline images in the document
+                img_counter = 1
+                for pic in root.findall('.//wp:inline/a:graphic/a:graphicData/pic:pic', ns):
+                    # Get the image size in EMUs (English Metric Units)
+                    cx = int(pic.find('pic:spPr/a:xfrm/a:ext', ns).get('cx'))
+                    cy = int(pic.find('pic:spPr/a:xfrm/a:ext', ns).get('cy'))
+                    # Convert the size from EMUs to centimeters (1 cm = 360000 EMUs)
+                    width = cx / 360000
+                    height = cy / 360000
+                    this_img_area = width * height
+                    full_total_img_area += this_img_area
+                    print(
+                        f'Изображение {img_counter}: {width:.2f} x {height:.2f} см. Площадь: {this_img_area:.2f} кв. сантиметров.')
+                    txt.write(f'Изображение {img_counter}: {width:.2f} x {height:.2f} см. Площадь: {this_img_area:.2f} кв. сантиметров.'+'\n')
+                    img_counter += 1
+        # os.remove("example.docx")
 
-    with zipfile.ZipFile('КОНВЕРТИРОВАНО.docx') as docx:
-        # Extract the document.xml file from the zip file
-        with docx.open('word/document.xml') as f:
-            # Parse the XML content
-            tree = ElementTree.parse(f)
-            root = tree.getroot()
-            # Define the XML namespaces
-            ns = {
-                'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-                'wp': 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
-                'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
-                'pic': 'http://schemas.openxmlformats.org/drawingml/2006/picture'
-            }
-            # Find all inline images in the document
-            img_counter = 1
-            for pic in root.findall('.//wp:inline/a:graphic/a:graphicData/pic:pic', ns):
-                # Get the image size in EMUs (English Metric Units)
-                cx = int(pic.find('pic:spPr/a:xfrm/a:ext', ns).get('cx'))
-                cy = int(pic.find('pic:spPr/a:xfrm/a:ext', ns).get('cy'))
-                # Convert the size from EMUs to centimeters (1 cm = 360000 EMUs)
-                width = cx / 360000
-                height = cy / 360000
-                this_img_area = width * height
-                full_total_img_area += this_img_area
-                print(f'Изображение {img_counter}: {width:.2f} x {height:.2f} см. Площадь: {this_img_area:.2f} кв. сантиметров.')
-                img_counter += 1
-    #os.remove("example.docx")
-
-    print(f'Количество символов: {total_chars}')
-    print(f'Количество строк: {total_lines}')
-    print(f'Площадь графических материалов по всему документу: {round(full_total_img_area, 2)} кв. сантиметров.')
-    print(f'Площадь таблиц по всему документу: {round(full_total_tab_area, 2)} кв. сантиметров.')
-    print(f'ВНИМАНИЕ! Если таблицы в документе сохранены как картинки, то они посчитаются и в площади граф. '
-          f'материалов, и в площади таблиц.')
-    print('----------------------------------------------')
+        print(f'Количество символов: {total_chars}')
+        print(f'Количество строк: {total_lines}')
+        print(f'Площадь графических материалов по всему документу: {round(full_total_img_area, 2)} кв. сантиметров.')
+        print(f'Площадь таблиц по всему документу: {round(full_total_tab_area, 2)} кв. сантиметров.')
+        print(f'ВНИМАНИЕ! Если таблицы в документе сохранены как картинки, то они посчитаются и в площади граф. '
+              f'материалов, и в площади таблиц.')
+        txt.write(f'Количество символов: {total_chars}'+'\n')
+        txt.write(f'Количество строк: {total_lines}'+'\n')
+        txt.write(f'Площадь графических материалов по всему документу: {round(full_total_img_area, 2)} кв. сантиметров.'+'\n')
+        txt.write(f'Площадь таблиц по всему документу: {round(full_total_tab_area, 2)} кв. сантиметров.'+'\n')
+        txt.write('ВНИМАНИЕ! Если таблицы в документе сохранены как картинки, то они посчитаются и в площади граф. материалов, и в площади таблиц.'+'\n')
+        print('----------------------------------------------')
 else:
     print('Отсутствуют pdf файлы в папке программы...')
 
