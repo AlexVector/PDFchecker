@@ -41,6 +41,7 @@ if pdf_file:
 
     # Open the file for writing in the subdirectory
     with open(os.path.join('Отчёты', file_name), 'w') as txt:
+        txt.write(f'Файл: ' + pdf_file + '\n')
         for page in range(len(pdf_reader.pages)):  # перебираем все страницы в pdf файле
             page_text = pdf_reader.pages[page].extract_text()
             lines = page_text.split('\n')
